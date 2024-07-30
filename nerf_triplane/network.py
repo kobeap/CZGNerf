@@ -227,72 +227,116 @@ class EmolabelEncoder(nn.Module):
 
 # todo dim marching during instantiation
 class ContrastiveNet(nn.Module):
-    def __init__(self):
+    def __init__(self,audio_dim = 32):
         super(ContrastiveNet, self).__init__()
-        self.conv= nn.Sequential(
-            nn.Conv2d(3, 64, kernel_size=5),
-            nn.ReLU(inplace=True),
-            nn.MaxPool2d(kernel_size=2, stride=2),
-            nn.Conv2d(64, 128, kernel_size=5),
-            nn.ReLU(inplace=True),
-            nn.MaxPool2d(kernel_size=2, stride=2)
+        self.fc1 =nn.Sequential(
+             nn.Linear(audio_dim, audio_dim//2),
+             nn.ReLU(inplace=True),
+             nn.Linear(audio_dim//2, audio_dim),
+             nn.ReLU(inplace=True)
         )
-        self.fc = nn.Sequential(
-            nn.Linear(128 * 5 * 5, 1024),
-            nn.ReLU(inplace=True),
-            nn.Linear(1024, 128)
+        self.fc2 =nn.Sequential(
+             nn.Linear(audio_dim, audio_dim//2),
+             nn.ReLU(inplace=True),
+             nn.Linear(audio_dim//2, audio_dim),
+             nn.ReLU(inplace=True)
         )
 
-    def encode_audioab(self, a,b): #a 和b都是提取特征之后的数据
-        # a: [1, 29, 16] or [8, 29, 16], audio features from deepspeech
-        # if emb, a should be: [1, 16] or [8, 16]
 
-        # fix audio traininig
-        if a is None: return 'a None'
-        if b is None: return 'b None'
+        # self.conv= nn.Sequential(
+        #     nn.Conv2d(3, 64, kernel_size=5),
+        #     nn.ReLU(inplace=True),
+        #     nn.MaxPool2d(kernel_size=2, stride=2),
+        #     nn.Conv2d(64, 128, kernel_size=5),
+        #     nn.ReLU(inplace=True),
+        #     nn.MaxPool2d(kernel_size=2, stride=2)
+        # )
+        # self.fc = nn.Sequential(
+        #     nn.Linear(128 * 5 * 5, 1024),
+        #     nn.ReLU(inplace=True),
+        #     nn.Linear(1024, 128)
+        # )
 
-        # print(a.shape)      # [8,1,512]
-        if self.emb:
-            a = self.embedding(a).transpose(-1, -2).contiguous()  # [1/8, 29, 16]
+    # def encode_audioab(self, a,b): #a 和b都是提取特征之后的数据
+    #     # a: [1, 29, 16] or [8, 29, 16], audio features from deepspeech
+    #     # if emb, a should be: [1, 16] or [8, 16]
+    #
+    #     # fix audio traininig
+    #     if a is None: return 'a None'
+    #     if b is None: return 'b None'
+    #
+    #     # print(a.shape)      # [8,1,512]
+    #     # if self.emb:
+    #     #     a = self.embedding(a).transpose(-1, -2).contiguous()  # [1/8, 29, 16]
+    #
+    #     enc_a = self.audio_net(a)  # [1/8, 64]  #now [8,32]
+    #     # print(enc_a.shape)   # ave [8,32]
+    #     # print(enc_a.shape,1111111111111111111111111111233)
+    #
+    #     # if self.emb:
+    #     #     b= self.embedding(b).transpose(-1, -2).contiguous()  # [1/8, 29, 16]
+    #
+    #     enc_b = self.audio_net(b)  # [1/8, 64]  #now [8,32]
+    #     # print(enc_a.shape,1111111111111111111111111111233) # result mamba[1,32]
+    #
+    #     return enc_a,enc_b
+    def forward(self, enc_a,enc_b):
+        # enc_a, enc_b = self.encode_audioab(a, b)
 
-        enc_a = self.audio_net(a)  # [1/8, 64]  #now [8,32]
-        # print(enc_a.shape)   # ave [8,32]
-        # print(enc_a.shape,1111111111111111111111111111233)
-
-        if self.emb:
-            b= self.embedding(b).transpose(-1, -2).contiguous()  # [1/8, 29, 16]
-
-        enc_b = self.audio_net(b)  # [1/8, 64]  #now [8,32]
-        # print(enc_a.shape,1111111111111111111111111111233) # result mamba[1,32]
-
-        return enc_a,enc_b
-    def forward(self, a,b):
-        enc_a, enc_b = self.encode_audioab(a, b)
-
-        out1 = self.conv(enc_a)
-        out1 = out1.view(out1.size(0), -1)
-        out1 = self.fc(out1)
-
-        out2 = self.conv(enc_b)
-        out2 = out2.view(out2.size(0), -1)
-        out2 = self.fc(out2)
-
+        # out1 = self.conv(enc_a)
+        # out1 = out1.view(out1.size(0), -1)
+        # out1 = self.fc(out1)
+        #
+        # out2 = self.conv(enc_b)
+        # out2 = out2.view(out2.size(0), -1)
+        # out2 = self.fc(out2)
+        out1 = self.fc2(self.fc1(enc_a))
+        out2 = self.fc2(self.fc1(enc_b))
+        # print(out1.shape)
         return out1, out2
 
 
 
 
+# class ContrastiveLoss(nn.Module):
+#     def __init__(self, margin=0.3):
+#         super(ContrastiveLoss, self).__init__()
+#         self.margin =margin
+#     def forward(self, output1,output2, label):
+#         euclidean_distance = nn.functional.pairwise_distance(output1, output2)
+#
+#         loss_contrastive = torch.mean((1 - label) * torch.pow(euclidean_distance, 2) +
+#                                       label * torch.pow(torch.clamp(self.margin - euclidean_distance, min=0.0), 2))
+#         return loss_contrastive
 class ContrastiveLoss(nn.Module):
-    def __init__(self, margin=0.1):
+    def __init__(self, temperature=0.5, device='cuda'):
         super(ContrastiveLoss, self).__init__()
-        self.margin =margin
-    def forward(self, output1,output2, label):
-        euclidean_distance = nn.functional.pairwise_distance(output1, output2)
+        self.temperature = temperature
+        self.device = device
 
-        loss_contrastive = torch.mean((1 - label) * torch.pow(euclidean_distance, 2) +
-                                      label * torch.pow(torch.clamp(self.margin - euclidean_distance, min=0.0), 2))
-        return loss_contrastive
+    def forward(self, output1, output2, labels):
+        # Normalize the outputs
+        z1 = F.normalize(output1, dim=1)
+        z2 = F.normalize(output2, dim=1)
 
+        # Compute cosine similarity
+        similarity_matrix = F.cosine_similarity(z1.unsqueeze(1), z2.unsqueeze(0), dim=2)
+
+        # Create positive and negative masks
+        labels = labels.unsqueeze(1)
+        mask = torch.eq(labels, labels.T).float().to(self.device)
+
+        # Compute the loss
+        positives = similarity_matrix * mask
+        negatives = similarity_matrix * (1 - mask)
+
+        nominator = torch.exp(positives / self.temperature)
+        denominator = torch.sum(torch.exp(similarity_matrix / self.temperature), dim=1, keepdim=True)
+
+        loss_partial = -torch.log(nominator / denominator)
+        loss = torch.sum(loss_partial) / output1.size(0)
+
+        return loss
 
 # TODO mlp网络
 class MLP(nn.Module):
@@ -720,8 +764,8 @@ class NeRFNetwork(NeRFRenderer):
 
         self.contrast_loss = self.opt.contrast_loss
         if self.contrast_loss:
-            self.ContrastNet = ContrastiveNet()
-            self.contrastloss = ContrastiveLoss(margin=0.1)
+            self.contrastNet = ContrastiveNet()
+            self.contrastloss = ContrastiveLoss()
         else:
             pass
 
@@ -1004,7 +1048,16 @@ class NeRFNetwork(NeRFRenderer):
             'ambient_emo': emo_att,
 
         }
+    def contrast(self, audact, audneg, emo_label):
+        a = self.audio_net(audact)
+        # print(a.shape)
+        enc_a = self.audio_att_net(a.unsqueeze(0))
 
+        b = self.audio_net(audneg)
+        enc_b = self.audio_att_net(b.unsqueeze(0))
+        output1, output2 = self.contrastNet(enc_a, enc_b)
+        contrast_loss = self.contrastloss(output1, output2, emo_label)
+        return contrast_loss
     # usage: optimizer parameters
     # optimizer utils
     def get_params(self, lr, lr_net, wd=0):
@@ -1056,5 +1109,7 @@ class NeRFNetwork(NeRFRenderer):
         if self.opt.emo:
             # 将网络加进训练
             params.append({'params': self.emo_att_net.parameters(), 'lr': lr_net*0.05, 'weight_decay': wd})
+        if self.opt.contrast_loss:
+            params.append({'params': self.contrastNet.parameters(), 'lr': lr_net * 0.05, 'weight_decay': wd})
 
         return params

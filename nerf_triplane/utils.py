@@ -802,7 +802,8 @@ class Trainer(object):
         audact = data['auds'].clone() # [B, 29, 16]  now[8,1,512]
         audneg = data['rev_aud']  # now[8,1,512]
         index = data['index'] # [B]  第几帧
-        print('audact.shape',audact.shape)
+        #print('audact.shape',audact.shape)  #  [8,1,512]
+        # print('audneg',audneg.shape)  #  [8,1,512]
         # TODO ADDING
         if self.opt.emo == True:
             emo_label = data['emo_label'] # [B,1]
@@ -860,7 +861,7 @@ class Trainer(object):
             # 求tv_loss
             # loss_2 = self.tv_loss(pred_rgb_reshape.unsqueeze(0))
             # 进行反向传播
-            loss_percep = self.opt.content_weight*content_lossF
+            loss_percep = self.opt.content_weight*content_loss
 
 
         if self.opt.torso:
@@ -966,7 +967,7 @@ class Trainer(object):
             ambient_eye = outputs['ambient_eye'] / self.opt.max_steps
 
             loss_cross = ((ambient_eye * ambient_aud.detach())*face_mask.view(-1)).mean()
-            loss += lambda_amb * loss_cross
+            loss += 1e-6*lambda_amb*loss_cross
 
         # TODO emo att loss
         # emo att loss
@@ -992,11 +993,13 @@ class Trainer(object):
 
 
         # 实例化contrast网络
-            if self.contrast_loss:
-                output1,output2=self.ContrastNet(audact,audneg)
-                contrast_loss = self.contractloss(output1,output2,emo_label)
-            loss+=   lambda_amb*contrast_loss
-
+            if self.opt.contrast_loss:
+                # print(audact)
+                # print(audneg)
+                # print(emo_label)
+                contrast_loss = self.model.contrast(audact, audneg,emo_label)
+                loss+=   lambda_amb*contrast_loss
+                # print(contrast_loss)
         # TODO 规范化损失，需要将emo等新加进去的也写在这里
         if self.global_step % 16 == 0 and not self.flip_finetune_lips:
             xyzs, dirs, enc_a, ind_code, eye = outputs['rays']
